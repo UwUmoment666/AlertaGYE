@@ -4,7 +4,7 @@
 
 Built for **Hack2Impact 2026** – Guayaquil heavy-rain challenge.
 
-🔗 **Live demo:** [[tu enlace de GitHub Pages]](https://uwumoment666.github.io/AlertaGYE/)
+🔗 **Live demo:** [[DEMO]](https://uwumoment666.github.io/AlertaGYE/)
 
 ## Features
 
@@ -62,7 +62,8 @@ It is a single `index.html` file with no build step:
 
 ## Team
 
-[nombres]
+Ney Gustavo Ruilova Romero
+Milena Paulette Andrade Sanchez
 
 ## Limitations and future work
 
