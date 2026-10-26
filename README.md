@@ -4,7 +4,7 @@
 
 Built for **Hack2Impact 2026** – Guayaquil heavy-rain challenge.
 
-🔗 **Live demo:** [[DEMO]](https://uwumoment666.github.io/AlertaGYE/)
+   🔗 **Live demo:** [uwumoment666.github.io/AlertaGYE](https://uwumoment666.github.io/AlertaGYE/)
 
 ## Features
 
@@ -16,6 +16,7 @@ Built for **Hack2Impact 2026** – Guayaquil heavy-rain challenge.
 - **Safe routes:** click an origin and a destination. The app asks OSRM for driving routes and recommends the one that crosses the fewest high-risk zones.
 - **Citizen reports:** mark flooding on the map as ankle-deep, knee-deep or impassable. Impassable reports make nearby routes riskier.
 - **Storm demo button:** replaces the real forecast with heavy rain so you can see the alerts and routing react.
+- **Sensor firmware prototype:** ESP32 + ultrasonic sensor, simulated in [Wokwi](https://wokwi.com/projects/478980965654087681). Code in `firmware/`.
 
 ## How the risk score works
 
