@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AlertaGYE – Flood early warning for Guayaquil</title>
+
+<script>
+// =====================================================================
+//  DATA — everything below is PLACEHOLDER data.
+//  Replace these constants with real data before using AlertaGYE.
+// =====================================================================
+
+// Map centre (also used for the Open-Meteo rain forecast).
+const CITY = { name: 'Guayaquil', lat: -2.19, lng: -79.89, zoom: 12 };
+
+// PLACEHOLDER flood-prone points. Coordinates are approximate.
+//   source      -> replace with the real reference (municipal risk map,
+//                  news report, field survey, ...).
+//   nearEstuary -> true if the area drains into the Estero Salado or the
+//                  Guayas river, so a high tide blocks its drainage.
+const FLOOD_POINTS = [
+  { id: 'centro',     name: 'Centro – Av. 9 de Octubre',   lat: -2.1894, lng: -79.8853, nearEstuary: true,  source: 'PLACEHOLDER – replace with real source' },
+  { id: 'urdesa',     name: 'Urdesa – Av. V. E. Estrada',  lat: -2.1695, lng: -79.9055, nearEstuary: true,  source: 'PLACEHOLDER – replace with real source' },
+  { id: 'suburbio',   name: 'Suburbio – Av. Portete',      lat: -2.2060, lng: -79.9150, nearEstuary: true,  source: 'PLACEHOLDER – replace with real source' },
+  { id: 'trinitaria', name: 'Isla Trinitaria',             lat: -2.2410, lng: -79.9120, nearEstuary: true,  source: 'PLACEHOLDER – replace with real source' },
+  { id: 'guasmo',     name: 'Guasmo Sur',                  lat: -2.2580, lng: -79.8920, nearEstuary: true,  source: 'PLACEHOLDER – replace with real source' },
+  { id: 'mapasingue', name: 'Mapasingue',                  lat: -2.1530, lng: -79.9250, nearEstuary: false, source: 'PLACEHOLDER – replace with real source' },
+  { id: 'sauces',     name: 'Sauces / Alborada',           lat: -2.1300, lng: -79.8970, nearEstuary: false, source: 'PLACEHOLDER – replace with real source' },
+  { id: 'bastion',    name: 'Bastión Popular',             lat: -2.0850, lng: -79.9300, nearEstuary: false, source: 'PLACEHOLDER – replace with real source' },
+];
+
+// PLACEHOLDER tide table for TODAY, local time (America/Guayaquil).
+// Replace with the official INOCAR tide table for the Guayaquil station.
+const TIDES_TODAY = [
+  { time: '03:10', type: 'high', heightM: 4.1 },
+  { time: '09:25', type: 'low',  heightM: 0.6 },
+  { time: '15:35', type: 'high', heightM: 4.3 },
+  { time: '21:50', type: 'low',  heightM: 0.5 },
+];
+
+// Rain (mm per hour) used when Open-Meteo cannot be reached (offline).
+const FALLBACK_RAIN_MM = [0, 0.2, 0.5, 1.2, 2.0, 1.0, 0.4, 0, 0, 0, 0, 0];
+
+// Rain (mm per hour) used by the "Simulate storm" demo button.
+const DEMO_STORM_MM = [14, 22, 18, 12, 8, 5, 3, 2, 1, 0, 0, 0];
+</script>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    display: flex; flex-direction: column;
+    font: 14px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    color: #1f2937; background: #f3f4f6;
+  }
+
+  header {
+    display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
+    padding: 10px 16px; background: #0c4a6e; color: #fff;
+  }
+  header h1 { margin: 0; font-size: 20px; }
+  header .tagline { opacity: .85; }
+  header .badge {
+    margin-left: auto; font-size: 12px; padding: 2px 8px;
+    border-radius: 10px; background: #f59e0b; color: #1f2937; font-weight: 600;
+  }
+
+  main { flex: 1; display: grid; grid-template-columns: 330px 1fr; min-height: 0; }
+
+  /* ---------- Sidebar ---------- */
+  aside { overflow-y: auto; padding: 12px; background: #fff; border-right: 1px solid #e5e7eb; }
+  aside section { margin-bottom: 18px; }
+  aside h2 { font-size: 14px; margin: 0 0 6px; text-transform: uppercase; letter-spacing: .04em; color: #0c4a6e; }
+  .muted { color: #6b7280; font-size: 12px; }
+  .tag { display: inline-block; font-size: 11px; padding: 1px 6px; border-radius: 8px; background: #fde68a; font-weight: 600; }
+
+  /* Rain bar chart (plain divs, no chart library) */
+  #rain-chart { display: flex; align-items: flex-end; gap: 3px; height: 110px; margin-top: 6px; }
+  .bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; }
+  .bar { width: 100%; background: #3b82f6; border-radius: 3px 3px 0 0; min-height: 1px; }
+  .bar-val { font-size: 10px; color: #374151; }
+  .bar-hour { font-size: 10px; color: #6b7280; }
+
+  /* Tide list */
+  #tide-list { list-style: none; padding: 0; margin: 4px 0; }
+  #tide-list li { display: flex; justify-content: space-between; padding: 2px 0; border-bottom: 1px dashed #e5e7eb; }
+  #tide-list li.next { font-weight: 700; }
+
+  /* Sensor meter */
+  .meter { height: 12px; background: #e5e7eb; border-radius: 6px; overflow: hidden; margin: 4px 0; }
+  .meter > div { height: 100%; width: 0; transition: width .5s, background .5s; }
+  #sensor-value { font-size: 22px; font-weight: 700; }
+
+  /* Zone list */
+  #zone-list { list-style: none; padding: 0; margin: 0; }
+  #zone-list li { display: flex; align-items: center; gap: 8px; padding: 3px 0; cursor: pointer; }
+  #zone-list li:hover { text-decoration: underline; }
+  #zone-list .score { margin-left: auto; color: #6b7280; font-variant-numeric: tabular-nums; }
+
+  .dot { width: 12px; height: 12px; border-radius: 50%; flex: none; border: 1px solid rgba(0,0,0,.25); }
+  .dot.green { background: #22c55e; } .dot.yellow { background: #facc15; } .dot.red { background: #ef4444; }
+
+  /* Legend */
+  .legend-row { display: flex; gap: 8px; margin: 4px 0; }
+  .legend-row .dot { margin-top: 3px; }
+
+  #storm-btn {
+    width: 100%; padding: 8px; border: 0; border-radius: 6px; cursor: pointer;
+    background: #1e3a8a; color: #fff; font-weight: 600;
+  }
+  #storm-btn.on { background: #b91c1c; }
+
+  /* ---------- Map + alert panel ---------- */
+  #map-wrap { position: relative; min-height: 0; }
+  #map { height: 100%; }
+
+  #alert-panel {
+    position: absolute; top: 10px; right: 10px; z-index: 1000;
+    width: min(340px, calc(100% - 20px)); max-height: 60%; overflow-y: auto;
+    background: #fff; border: 2px solid #dc2626; border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0,0,0,.25);
+  }
+  #alert-panel[hidden] { display: none; }
+  #alert-panel .head {
+    display: flex; align-items: center; padding: 8px 10px; background: #dc2626; color: #fff; font-weight: 700;
+  }
+  #alert-panel .head button { margin-left: auto; background: none; border: 0; color: #fff; font-size: 18px; cursor: pointer; }
+  #alert-list { list-style: none; margin: 0; padding: 0; }
+  #alert-list li { padding: 8px 10px; border-bottom: 1px solid #fee2e2; }
+  #alert-list .time { font-weight: 700; color: #b91c1c; }
+
+  /* Simulated sensor marker on the map */
+  .sensor-icon {
+    width: 24px; height: 24px; border-radius: 50%; background: #111827; color: #fff;
+    font: 700 11px/20px system-ui, sans-serif; text-align: center; border: 2px solid #fff;
+    box-shadow: 0 1px 4px rgba(0,0,0,.5);
+  }
+
+  @media (max-width: 760px) {
+    main { grid-template-columns: 1fr; grid-template-rows: 55vh auto; }
+    #map-wrap { order: -1; }
+    aside { border-right: 0; overflow: visible; }
+    body { height: auto; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>AlertaGYE</h1>
+  <span class="tagline">Flood early warning for Guayaquil</span>
+  <span class="badge">Prototype · placeholder data</span>
+</header>
+
+<main>
+  <aside>
+    <section>
+      <h2>Rain forecast · next 12 h</h2>
+      <div id="rain-status" class="muted">Loading forecast…</div>
+      <div id="rain-chart"></div>
+    </section>
+
+    <section>
+      <h2>Tide today <span class="tag">PLACEHOLDER</span></h2>
+      <div id="tide-status"></div>
+      <ul id="tide-list"></ul>
+    </section>
+
+    <section>
+      <h2>Water-level sensor <span class="tag">SIMULATED</span></h2>
+      <div class="muted" id="sensor-where"></div>
+      <div id="sensor-value">– cm</div>
+      <div class="meter"><div id="sensor-meter"></div></div>
+      <div class="muted" id="sensor-updated"></div>
+    </section>
+
+    <section>
+      <h2>Zones</h2>
+      <ul id="zone-list"></ul>
+    </section>
+
+    <section>
+      <h2>Legend</h2>
+      <div id="legend"></div>
+    </section>
+
+    <section>
+      <button id="storm-btn">Simulate storm (demo)</button>
+      <p class="muted">Replaces the real forecast with heavy rain so you can see the alerts work.</p>
+    </section>
+
+    <p class="muted">
+      Weather data: <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo.com</a> (CC BY 4.0).
+      Map: © OpenStreetMap contributors.
+    </p>
+  </aside>
+
+  <div id="map-wrap">
+    <div id="map"></div>
+
+    <div id="alert-panel" hidden>
+      <div class="head">⚠ Flood alerts <button id="alert-close" title="Hide">×</button></div>
+      <ul id="alert-list"></ul>
+    </div>
+  </div>
+</main>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+<script>
+// =====================================================================
+//  SETTINGS
+// =====================================================================
+const CONFIG = {
+  timezone: 'America/Guayaquil',
+  zoneRadiusM: 700,          // radius of each risk circle on the map
+  rainRefreshMinutes: 30,    // how often to re-download the forecast
+  tickSeconds: 3,            // how often the sensor updates and risk is recomputed
+  tideHighWindowMin: 90,     // "high tide" = within ±90 min of a high-tide time
+};
+
+// Simulated water-level sensor (street water depth in cm).
+// Each tick:  level += rain_now * rainGain  -  (level - baseline) * drainRate
+// so the level rises while it rains and slowly drains back when it stops.
+const SENSOR = {
+  pointId: 'suburbio',       // which FLOOD_POINT has the sensor
+  baselineCm: 2,             // level with no rain
+  rainGainCmPerMm: 0.5,      // cm added per tick for each mm/h of rain
+  drainRate: 0.08,           // fraction of the excess water drained per tick
+  highTideDrainFactor: 0.5,  // drainage is halved while the tide is high
+  noiseCm: 0.6,              // random jitter to look like a real sensor
+  maxCm: 150,
+};
+
+// =====================================================================
+//  RISK FORMULA — the ONE place where a zone's risk is decided.
+//  Tweak the numbers in RISK to change how sensitive the system is.
+// =====================================================================
+//
+//  score = rain points + tide points + sensor points
+//
+//    rain points   : 0 → 50, grows linearly with the rain expected in the
+//                    next `rainWindowHours` hours; maxed at `heavyRainMm`.
+//    tide points   : +25 if the tide is high AND the zone drains into the
+//                    estuary (high tide blocks the drains).
+//    sensor points : 0 → 40, grows linearly with the measured water depth;
+//                    maxed at `sensorFloodCm`. Only for the zone that has
+//                    the sensor (other zones pass sensorCm = null).
+//
+//  level: score >= redAt → red, score >= yellowAt → yellow, else green.
+//
+//  Examples: 20 mm in 3 h alone           → 50 → yellow
+//            20 mm in 3 h + high tide     → 75 → red
+//            dry, high tide               → 25 → green
+//
+const RISK = {
+  rainWindowHours: 3,
+  heavyRainMm: 20,  rainMaxPts: 50,
+  tidePts: 25,
+  sensorFloodCm: 30, sensorMaxPts: 40,
+  yellowAt: 30,
+  redAt: 60,
+};
+
+function computeRisk({ rainMm, tideHigh, nearEstuary, sensorCm }) {
+  const reasons = [];
+
+  // 1) Forecast rain
+  const rainPts = Math.min(rainMm / RISK.heavyRainMm, 1) * RISK.rainMaxPts;
+  if (rainMm > 0) reasons.push(`${rainMm.toFixed(1)} mm of rain expected in the next ${RISK.rainWindowHours} h`);
+
+  // 2) High tide (only matters where the drains reach the estuary)
+  const tidePts = (tideHigh && nearEstuary) ? RISK.tidePts : 0;
+  if (tidePts > 0) reasons.push('high tide is blocking drainage');
+
+  // 3) Sensor reading (only the zone that has a sensor)
+  let sensorPts = 0;
+  if (sensorCm !== null) {
+    sensorPts = Math.min(sensorCm / RISK.sensorFloodCm, 1) * RISK.sensorMaxPts;
+    reasons.push(`sensor reads ${sensorCm.toFixed(0)} cm of water (simulated)`);
+  }
+
+  const score = Math.round(rainPts + tidePts + sensorPts);
+  const level = score >= RISK.redAt ? 'red' : score >= RISK.yellowAt ? 'yellow' : 'green';
+  return { score, level, reasons };
+}
+
+// =====================================================================
+//  APP STATE
+// =====================================================================
+const state = {
+  liveForecast: [],          // [{ time: ms, mm }] from Open-Meteo (or fallback)
+  forecastSource: '',
+  storm: false,              // demo storm on/off
+  sensorCm: SENSOR.baselineCm,
+  alerts: [],                // newest first
+};
+
+// =====================================================================
+//  TIME HELPERS (always Guayaquil time, whatever the viewer's timezone)
+// =====================================================================
+const fmtHour = new Intl.DateTimeFormat('en-GB', { timeZone: CONFIG.timezone, hour: '2-digit', hourCycle: 'h23' });
+const fmtTime = new Intl.DateTimeFormat('en-GB', { timeZone: CONFIG.timezone, hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' });
+
+// Minutes since midnight, Guayaquil time.
+function minutesNow() {
+  const [h, m] = fmtTime.format(new Date()).split(':').map(Number);
+  return h * 60 + m;
+}
+const toMinutes = (hhmm) => { const [h, m] = hhmm.split(':').map(Number); return h * 60 + m; };
+
+// =====================================================================
+//  TIDE
+// =====================================================================
+function isTideHigh() {
+  const now = minutesNow();
+  return TIDES_TODAY.some(t => t.type === 'high' && Math.abs(toMinutes(t.time) - now) <= CONFIG.tideHighWindowMin);
+}
+
+function renderTide() {
+  const now = minutesNow();
+  const next = TIDES_TODAY.find(t => toMinutes(t.time) > now);
+  document.getElementById('tide-list').innerHTML = TIDES_TODAY.map(t =>
+    `<li class="${t === next ? 'next' : ''}"><span>${t.type === 'high' ? '▲ High' : '▼ Low'}</span><span>${t.time}</span><span>${t.heightM.toFixed(1)} m</span></li>`
+  ).join('');
+  document.getElementById('tide-status').innerHTML = isTideHigh()
+    ? '<b style="color:#b91c1c">Tide is HIGH now</b>'
+    : 'Tide is not high now';
+}
+
+// =====================================================================
+//  RAIN FORECAST (Open-Meteo, free, no API key)
+// =====================================================================
+const OPEN_METEO_URL =
+  'https://api.open-meteo.com/v1/forecast' +
+  `?latitude=${CITY.lat}&longitude=${CITY.lng}` +
+  '&hourly=precipitation&forecast_days=2&timeformat=unixtime';
+
+// Turns a list of mm values into [{time, mm}] starting at the current hour.
+function hoursFromNow(mmList) {
+  const hourStart = Math.floor(Date.now() / 3600000) * 3600000;
+  return mmList.map((mm, i) => ({ time: hourStart + i * 3600000, mm }));
+}
+
+async function loadForecast() {
+  try {
+    const res = await fetch(OPEN_METEO_URL);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+
+    // Keep the 12 hours starting from the current hour.
+    const hourStart = Math.floor(Date.now() / 3600000) * 3600;
+    state.liveForecast = data.hourly.time
+      .map((t, i) => ({ time: t * 1000, mm: data.hourly.precipitation[i] ?? 0 }))
+      .filter(h => h.time / 1000 >= hourStart)
+      .slice(0, 12);
+    state.forecastSource = 'Open-Meteo · updated ' + fmtTime.format(new Date()).slice(0, 5);
+  } catch (err) {
+    console.warn('Open-Meteo unavailable, using fallback data:', err);
+    state.liveForecast = hoursFromNow(FALLBACK_RAIN_MM);
+    state.forecastSource = '⚠ Offline – showing PLACEHOLDER rain';
+  }
+  renderRain();
+  evaluateAll();
+}
+
+// The forecast actually used by the app (real one, or the demo storm).
+function activeForecast() {
+  return state.storm ? hoursFromNow(DEMO_STORM_MM) : state.liveForecast;
+}
+
+function renderRain() {
+  const forecast = activeForecast();
+  const total = forecast.reduce((s, h) => s + h.mm, 0);
+  document.getElementById('rain-status').innerHTML =
+    (state.storm ? '<b style="color:#b91c1c">DEMO storm data</b>' : state.forecastSource) +
+    ` · total ${total.toFixed(1)} mm`;
+
+  // Bars are scaled to the wettest hour (at least 5 mm so drizzle looks small).
+  const maxMm = Math.max(5, ...forecast.map(h => h.mm));
+  document.getElementById('rain-chart').innerHTML = forecast.map(h => `
+    <div class="bar-col" title="${fmtHour.format(h.time)}:00 – ${h.mm} mm">
+      <span class="bar-val">${h.mm > 0 ? h.mm.toFixed(1) : ''}</span>
+      <div class="bar" style="height:${(h.mm / maxMm) * 80}%"></div>
+      <span class="bar-hour">${fmtHour.format(h.time)}h</span>
+    </div>`).join('');
+}
+
+// =====================================================================
+//  SIMULATED SENSOR
+// =====================================================================
+function stepSensor() {
+  const forecast = activeForecast();
+  const rainNow = forecast.length ? forecast[0].mm : 0;   // mm/h this hour
+  const drain = SENSOR.drainRate * (isTideHigh() ? SENSOR.highTideDrainFactor : 1);
+  const noise = (Math.random() - 0.5) * SENSOR.noiseCm;
+
+  const level = state.sensorCm
+    + rainNow * SENSOR.rainGainCmPerMm
+    - (state.sensorCm - SENSOR.baselineCm) * drain
+    + noise;
+  state.sensorCm = Math.min(Math.max(level, 0), SENSOR.maxCm);
+}
+
+function renderSensor() {
+  const cm = state.sensorCm;
+  const color = cm >= RISK.sensorFloodCm ? '#ef4444' : cm >= RISK.sensorFloodCm / 2 ? '#facc15' : '#22c55e';
+  document.getElementById('sensor-value').textContent = cm.toFixed(1) + ' cm';
+  const meter = document.getElementById('sensor-meter');
+  meter.style.width = Math.min(cm / (RISK.sensorFloodCm * 1.5), 1) * 100 + '%';
+  meter.style.background = color;
+  document.getElementById('sensor-updated').textContent =
+    `Flood threshold ${RISK.sensorFloodCm} cm · updated ${fmtTime.format(new Date())}`;
+}
+
+// =====================================================================
+//  MAP
+// =====================================================================
+const map = L.map('map').setView([CITY.lat, CITY.lng], CITY.zoom);
+
+// The main OpenStreetMap tile server blocks pages opened as a local file
+// (file://) because the browser sends no Referer ("403 Access blocked").
+// So: on a website (GitHub Pages, localhost) use the main OSM tiles; when the
+// file is opened directly, use the German OSM community server, which
+// serves the same OpenStreetMap data without needing a Referer.
+const openedAsFile = !location.protocol.startsWith('http');
+L.tileLayer(
+  openedAsFile
+    ? 'https://tile.openstreetmap.de/{z}/{x}/{y}.png'
+    : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+  {
+    maxZoom: 18,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+  }
+).addTo(map);
+
+const LEVEL_STYLE = {
+  green:  { color: '#15803d', fillColor: '#22c55e' },
+  yellow: { color: '#a16207', fillColor: '#facc15' },
+  red:    { color: '#b91c1c', fillColor: '#ef4444' },
+};
+const LEVEL_LABEL = { green: 'Low', yellow: 'Watch', red: 'WARNING' };
+
+// One circle per flood point.
+const zones = FLOOD_POINTS.map(point => {
+  const circle = L.circle([point.lat, point.lng], {
+    radius: CONFIG.zoneRadiusM, weight: 2, fillOpacity: 0.35, ...LEVEL_STYLE.green,
+  }).addTo(map);
+  circle.bindTooltip(point.name);
+  circle.bindPopup('');
+  return { point, circle, risk: null };
+});
+
+// Marker for the simulated sensor.
+const sensorPoint = FLOOD_POINTS.find(p => p.id === SENSOR.pointId);
+L.marker([sensorPoint.lat, sensorPoint.lng], {
+  icon: L.divIcon({ className: '', html: '<div class="sensor-icon">S</div>', iconSize: [24, 24] }),
+}).addTo(map).bindTooltip('SIMULATED water-level sensor', { direction: 'top', offset: [0, -12] });
+document.getElementById('sensor-where').textContent = 'Located at: ' + sensorPoint.name;
+
+function popupHtml(zone) {
+  const { point, risk } = zone;
+  return `<b>${point.name}</b><br>
+    Risk: <b>${LEVEL_LABEL[risk.level]}</b> (score ${risk.score})<br>
+    ${risk.reasons.length ? '<ul style="margin:4px 0;padding-left:16px">' + risk.reasons.map(r => `<li>${r}</li>`).join('') + '</ul>' : 'No risk factors right now.<br>'}
+    <span class="muted">Source: ${point.source}</span>`;
+}
+
+// =====================================================================
+//  EVALUATE RISK FOR ALL ZONES
+// =====================================================================
+function evaluateAll() {
+  const forecast = activeForecast();
+  const rainMm = forecast.slice(0, RISK.rainWindowHours).reduce((s, h) => s + h.mm, 0);
+  const tideHigh = isTideHigh();
+
+  zones.forEach(zone => {
+    const sensorCm = zone.point.id === SENSOR.pointId ? state.sensorCm : null;
+    const risk = computeRisk({ rainMm, tideHigh, nearEstuary: zone.point.nearEstuary, sensorCm });
+
+    // Raise an alert only when a zone CHANGES to red.
+    if (risk.level === 'red' && zone.risk?.level !== 'red') raiseAlert(zone.point, risk);
+
+    zone.risk = risk;
+    zone.circle.setStyle(LEVEL_STYLE[risk.level]);
+    zone.circle.setPopupContent(popupHtml(zone));
+  });
+
+  renderZoneList();
+}
+
+function renderZoneList() {
+  const list = document.getElementById('zone-list');
+  list.innerHTML = zones.map((z, i) => `
+    <li data-i="${i}"><span class="dot ${z.risk.level}"></span>${z.point.name}
+      ${z.point.id === SENSOR.pointId ? '<span class="tag">S</span>' : ''}
+      <span class="score">${z.risk.score}</span></li>`).join('');
+}
+
+// Click a zone in the list → fly to it and open its popup.
+document.getElementById('zone-list').addEventListener('click', e => {
+  const li = e.target.closest('li');
+  if (!li) return;
+  const zone = zones[li.dataset.i];
+  map.flyTo(zone.circle.getLatLng(), 14);
+  zone.circle.openPopup();
+});
+
+// =====================================================================
+//  ALERTS
+// =====================================================================
+function raiseAlert(point, risk) {
+  state.alerts.unshift({ time: new Date(), name: point.name, score: risk.score, reasons: risk.reasons });
+  renderAlerts();
+  document.getElementById('alert-panel').hidden = false;
+}
+
+function renderAlerts() {
+  document.getElementById('alert-list').innerHTML = state.alerts.map(a => `
+    <li><span class="time">${fmtTime.format(a.time)}</span> · <b>${a.name}</b> turned RED (score ${a.score})<br>
+      <span class="muted">Reason: ${a.reasons.join('; ')}</span></li>`).join('');
+}
+
+document.getElementById('alert-close').onclick = () => {
+  document.getElementById('alert-panel').hidden = true;
+};
+
+// =====================================================================
+//  LEGEND (built from RISK so it stays in sync with the formula)
+// =====================================================================
+document.getElementById('legend').innerHTML = `
+  <div class="legend-row"><span class="dot green"></span><div><b>Green – Low</b> (score &lt; ${RISK.yellowAt}). Normal conditions.</div></div>
+  <div class="legend-row"><span class="dot yellow"></span><div><b>Yellow – Watch</b> (${RISK.yellowAt}–${RISK.redAt - 1}). Rain and/or tide could flood streets. Stay informed.</div></div>
+  <div class="legend-row"><span class="dot red"></span><div><b>Red – Warning</b> (≥ ${RISK.redAt}). Flooding likely. Avoid the area. Triggers an alert.</div></div>
+  <div class="legend-row"><span class="sensor-icon" style="width:16px;height:16px;line-height:12px;font-size:8px;flex:none">S</span><div>Simulated water-level sensor.</div></div>
+  <p class="muted">Score = rain (0–${RISK.rainMaxPts}) + high tide (${RISK.tidePts}, estuary zones only) + sensor (0–${RISK.sensorMaxPts}).</p>`;
+
+// =====================================================================
+//  DEMO STORM BUTTON
+// =====================================================================
+document.getElementById('storm-btn').onclick = (e) => {
+  state.storm = !state.storm;
+  e.target.classList.toggle('on', state.storm);
+  e.target.textContent = state.storm ? 'Stop storm demo' : 'Simulate storm (demo)';
+  renderRain();
+  evaluateAll();
+};
+
+// =====================================================================
+//  START
+// =====================================================================
+function tick() {
+  stepSensor();
+  renderSensor();
+  renderTide();
+  evaluateAll();
+}
+
+renderTide();
+renderSensor();
+loadForecast();
+setInterval(tick, CONFIG.tickSeconds * 1000);
+setInterval(loadForecast, CONFIG.rainRefreshMinutes * 60 * 1000);
+</script>
+</body>
+</html>
