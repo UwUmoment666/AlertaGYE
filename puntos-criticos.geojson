@@ -1,0 +1,126 @@
+{
+  "type": "FeatureCollection",
+  "name": "puntos_criticos_inundacion_gye",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "sauces6",
+        "nombre": "Sauces 6",
+        "tipo": "sector",
+        "barrio": "sauces",
+        "fuente": "https://www.primicias.ec/guayaquil/inundaciones-negocios-sauces-lluvias-ecuador-93180",
+        "coords_verificadas": false
+      },
+      "geometry": { "type": "Point", "coordinates": [-79.8965, -2.1225] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "benjamin_carrion",
+        "nombre": "Av. Benjamín Carrión (Alborada)",
+        "tipo": "avenida",
+        "barrio": "alborada",
+        "fuente": "https://www.expreso.ec/guayaquil/inundaciones-impresionantes-imagenes-ciudad-agua-154828.html",
+        "coords_verificadas": false
+      },
+      "geometry": { "type": "Point", "coordinates": [-79.9010, -2.1385] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "florida_norte",
+        "nombre": "Paso elevado Florida Norte, km 8 vía a Daule",
+        "tipo": "paso_desnivel",
+        "barrio": "via_daule",
+        "fuente": "https://www.extra.ec/noticia/ecuador/guayaquil-inundacion-via-daule-colapso-lluvia-2025-122110.html",
+        "coords_verificadas": false
+      },
+      "geometry": { "type": "Point", "coordinates": [-79.9285, -2.1230] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "av_25_julio",
+        "nombre": "Av. 25 de Julio",
+        "tipo": "avenida",
+        "barrio": "sur",
+        "fuente": "https://primicias.ec/guayaquil/clima-lluvia-invierno-vias-inundadas-24febrero-inamhi-90449",
+        "coords_verificadas": false
+      },
+      "geometry": { "type": "Point", "coordinates": [-79.8870, -2.2280] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "av_quito_hospital_nino",
+        "nombre": "Av. Quito, a la altura del Hospital del Niño",
+        "tipo": "avenida",
+        "barrio": "centro",
+        "fuente": "https://www.eldiario.ec/guayaquil/tormenta-electrica-eguayaquil-calles-inundadas-problemas-movilidad-suspension-aerovia-advertencia-18022026/",
+        "coords_verificadas": false
+      },
+      "geometry": { "type": "Point", "coordinates": [-79.8925, -2.1985] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "guayacanes",
+        "nombre": "Guayacanes",
+        "tipo": "sector",
+        "barrio": "guayacanes",
+        "fuente": "https://primicias.ec/guayaquil/lluvia-guayaquil-inundaciones-inamhi-clima-16enero-87602",
+        "coords_verificadas": false
+      },
+      "geometry": { "type": "Point", "coordinates": [-79.8905, -2.1170] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "samanes1_elina_manzano",
+        "nombre": "Samanes 1, calle Elina Manzano",
+        "tipo": "calle",
+        "barrio": "samanes",
+        "fuente": "https://www.expreso.ec/guayaquil/lluvias-provocan-inundaciones-16-sectores-guayaquil-231585.html",
+        "coords_verificadas": false
+      },
+      "geometry": { "type": "Point", "coordinates": [-79.9000, -2.1100] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "tanca_marengo",
+        "nombre": "Av. Juan Tanca Marengo",
+        "tipo": "avenida",
+        "barrio": "norte",
+        "fuente": "https://primicias.ec/guayaquil/fuertes-lluvias-guayaquil-27marzo-caos-vehicular-92669",
+        "coords_verificadas": false
+      },
+      "geometry": { "type": "Point", "coordinates": [-79.9060, -2.1550] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "los_ceibos",
+        "nombre": "Los Ceibos",
+        "tipo": "sector",
+        "barrio": "ceibos",
+        "fuente": "https://primicias.ec/guayaquil/fuertes-lluvias-guayaquil-27marzo-caos-vehicular-92669",
+        "coords_verificadas": false
+      },
+      "geometry": { "type": "Point", "coordinates": [-79.9420, -2.1650] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "guasmo_norte",
+        "nombre": "Guasmo Norte",
+        "tipo": "sector",
+        "barrio": "guasmo",
+        "fuente": "https://primicias.ec/guayaquil/inundaciones-lluvias-colapso-vias-invierno-87694",
+        "coords_verificadas": false
+      },
+      "geometry": { "type": "Point", "coordinates": [-79.8850, -2.2550] }
+    }
+  ]
+}
