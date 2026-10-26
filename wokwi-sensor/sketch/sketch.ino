@@ -20,15 +20,15 @@ const char* MQTT_BROKER = "broker.hivemq.com";
 const int   MQTT_PORT   = 1883;
 
 // Identidad del nodo: debe coincidir con los ids del GeoJSON
-const char* SENSOR_ID = "sauces6";
-const char* BARRIO    = "sauces";
+const char* SENSOR_ID = "florida_norte";
+const char* BARRIO    = "via_daule";
 
 // Tópico donde publica: alertagye/sensores/<SENSOR_ID>
 String topico = String("alertagye/sensores/") + SENSOR_ID;
 
 // Geometría de la instalación (en cm)
 const float ALTURA_SENSOR   = 200.0;  // distancia del sensor al fondo seco
-const float ALTURA_CRITICA  = 60.0;   // nivel de agua que se considera inundación
+const float ALTURA_CRITICA  = 30.0;   // nivel de agua que se considera inundación
 
 // Pines
 const int PIN_TRIG = 5;
