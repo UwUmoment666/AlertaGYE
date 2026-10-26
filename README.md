@@ -4,7 +4,7 @@
 
 Built for **Hack2Impact 2026** – Guayaquil heavy-rain challenge.
 
-🔗 **Live demo:** [tu enlace de GitHub Pages]
+🔗 **Live demo:** [[tu enlace de GitHub Pages]](https://uwumoment666.github.io/AlertaGYE/)
 
 ## Features
 
