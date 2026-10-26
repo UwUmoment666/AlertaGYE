@@ -7,37 +7,176 @@
 
 <script>
 // =====================================================================
-//  DATA — everything below is PLACEHOLDER data.
-//  Replace these constants with real data before using AlertaGYE.
+//  DATA
 // =====================================================================
 
 // Map centre (also used for the Open-Meteo rain forecast).
 const CITY = { name: 'Guayaquil', lat: -2.19, lng: -79.89, zoom: 12 };
 
-// PLACEHOLDER flood-prone points. Coordinates are approximate.
-//   source      -> replace with the real reference (municipal risk map,
-//                  news report, field survey, ...).
-//   nearEstuary -> true if the area drains into the Estero Salado or the
-//                  Guayas river, so a high tide blocks its drainage.
-const FLOOD_POINTS = [
-  { id: 'centro',     name: 'Centro – Av. 9 de Octubre',   lat: -2.1894, lng: -79.8853, nearEstuary: true,  source: 'PLACEHOLDER – replace with real source' },
-  { id: 'urdesa',     name: 'Urdesa – Av. V. E. Estrada',  lat: -2.1695, lng: -79.9055, nearEstuary: true,  source: 'PLACEHOLDER – replace with real source' },
-  { id: 'suburbio',   name: 'Suburbio – Av. Portete',      lat: -2.2060, lng: -79.9150, nearEstuary: true,  source: 'PLACEHOLDER – replace with real source' },
-  { id: 'trinitaria', name: 'Isla Trinitaria',             lat: -2.2410, lng: -79.9120, nearEstuary: true,  source: 'PLACEHOLDER – replace with real source' },
-  { id: 'guasmo',     name: 'Guasmo Sur',                  lat: -2.2580, lng: -79.8920, nearEstuary: true,  source: 'PLACEHOLDER – replace with real source' },
-  { id: 'mapasingue', name: 'Mapasingue',                  lat: -2.1530, lng: -79.9250, nearEstuary: false, source: 'PLACEHOLDER – replace with real source' },
-  { id: 'sauces',     name: 'Sauces / Alborada',           lat: -2.1300, lng: -79.8970, nearEstuary: false, source: 'PLACEHOLDER – replace with real source' },
-  { id: 'bastion',    name: 'Bastión Popular',             lat: -2.0850, lng: -79.9300, nearEstuary: false, source: 'PLACEHOLDER – replace with real source' },
-];
+// Flood-prone points from local news reports (approximate locations).
+// GeoJSON: coordinates are [lng, lat].
+//   vulnerabilidad        -> 1 (low) to 3 (high), used in the risk formula
+//   motivo_vulnerabilidad -> why it got that level
+//   fuente                -> link to the news report
+const FLOOD_POINTS_GEOJSON = {
+  "type": "FeatureCollection",
+  "name": "puntos_criticos_inundacion_gye",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "sauces6",
+        "nombre": "Sauces 6",
+        "tipo": "sector",
+        "barrio": "sauces",
+        "fuente": "https://www.primicias.ec/guayaquil/inundaciones-negocios-sauces-lluvias-ecuador-93180",
+        "coords_verificadas": false,
+        "vulnerabilidad": 3,
+        "motivo_vulnerabilidad": "Agua de hasta 40 cm, bus urbano varado y 36 locales cerrados (abr 2025)."
+      },
+      "geometry": { "type": "Point", "coordinates": [-79.8965, -2.1225] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "benjamin_carrion",
+        "nombre": "Av. Benjamín Carrión (Alborada)",
+        "tipo": "avenida",
+        "barrio": "alborada",
+        "fuente": "https://www.expreso.ec/guayaquil/inundaciones-impresionantes-imagenes-ciudad-agua-154828.html",
+        "coords_verificadas": false,
+        "vulnerabilidad": 3,
+        "motivo_vulnerabilidad": "La fuente reporta la avenida colapsada y el sector completamente inundado (mar 2023)."
+      },
+      "geometry": { "type": "Point", "coordinates": [-79.901, -2.1385] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "florida_norte",
+        "nombre": "Paso elevado Florida Norte, km 8 vía a Daule",
+        "tipo": "paso_desnivel",
+        "barrio": "via_daule",
+        "fuente": "https://www.extra.ec/noticia/ecuador/guayaquil-inundacion-via-daule-colapso-lluvia-2025-122110.html",
+        "coords_verificadas": false,
+        "vulnerabilidad": 3,
+        "motivo_vulnerabilidad": "Buses, autos y peatones atrapados bajo el paso; vehículos averiados (feb 2025)."
+      },
+      "geometry": { "type": "Point", "coordinates": [-79.9285, -2.123] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "av_25_julio",
+        "nombre": "Av. 25 de Julio",
+        "tipo": "avenida",
+        "barrio": "sur",
+        "fuente": "https://primicias.ec/guayaquil/clima-lluvia-invierno-vias-inundadas-24febrero-inamhi-90449",
+        "coords_verificadas": false,
+        "vulnerabilidad": 2,
+        "motivo_vulnerabilidad": "Avenida convertida en 'piscina' por acumulación de agua, sin daños reportados (feb 2025)."
+      },
+      "geometry": { "type": "Point", "coordinates": [-79.887, -2.228] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "av_quito_hospital_nino",
+        "nombre": "Av. Quito, a la altura del Hospital del Niño",
+        "tipo": "avenida",
+        "barrio": "centro",
+        "fuente": "https://www.eldiario.ec/guayaquil/tormenta-electrica-eguayaquil-calles-inundadas-problemas-movilidad-suspension-aerovia-advertencia-18022026/",
+        "coords_verificadas": false,
+        "vulnerabilidad": 2,
+        "motivo_vulnerabilidad": "Calzada anegada que complicó el paso de vehículos y peatones por horas (feb 2026)."
+      },
+      "geometry": { "type": "Point", "coordinates": [-79.8925, -2.1985] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "guayacanes",
+        "nombre": "Guayacanes",
+        "tipo": "sector",
+        "barrio": "guayacanes",
+        "fuente": "https://primicias.ec/guayaquil/lluvia-guayaquil-inundaciones-inamhi-clima-16enero-87602",
+        "coords_verificadas": false,
+        "vulnerabilidad": 2,
+        "motivo_vulnerabilidad": "Uno de los sectores más afectados; calles cubiertas de agua como 'piscina' (ene 2025)."
+      },
+      "geometry": { "type": "Point", "coordinates": [-79.8905, -2.117] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "samanes1_elina_manzano",
+        "nombre": "Samanes 1, calle Elina Manzano",
+        "tipo": "calle",
+        "barrio": "samanes",
+        "fuente": "https://www.expreso.ec/guayaquil/lluvias-provocan-inundaciones-16-sectores-guayaquil-231585.html",
+        "coords_verificadas": false,
+        "vulnerabilidad": 1,
+        "motivo_vulnerabilidad": "Solo aparece como punto con acumulación de agua en el reporte de Segura EP (feb 2025)."
+      },
+      "geometry": { "type": "Point", "coordinates": [-79.9, -2.11] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "tanca_marengo",
+        "nombre": "Av. Juan Tanca Marengo",
+        "tipo": "avenida",
+        "barrio": "norte",
+        "fuente": "https://primicias.ec/guayaquil/fuertes-lluvias-guayaquil-27marzo-caos-vehicular-92669",
+        "coords_verificadas": false,
+        "vulnerabilidad": 1,
+        "motivo_vulnerabilidad": "Solo listada entre sectores con acumulación de agua, sin más detalle (mar 2025)."
+      },
+      "geometry": { "type": "Point", "coordinates": [-79.906, -2.155] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "los_ceibos",
+        "nombre": "Los Ceibos",
+        "tipo": "sector",
+        "barrio": "ceibos",
+        "fuente": "https://primicias.ec/guayaquil/fuertes-lluvias-guayaquil-27marzo-caos-vehicular-92669",
+        "coords_verificadas": false,
+        "vulnerabilidad": 2,
+        "motivo_vulnerabilidad": "Agua hasta las rodillas por una alcantarilla tapada con basura (mar 2025)."
+      },
+      "geometry": { "type": "Point", "coordinates": [-79.942, -2.165] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "guasmo_norte",
+        "nombre": "Guasmo Norte",
+        "tipo": "sector",
+        "barrio": "guasmo",
+        "fuente": "https://primicias.ec/guayaquil/inundaciones-lluvias-colapso-vias-invierno-87694",
+        "coords_verificadas": false,
+        "vulnerabilidad": 2,
+        "motivo_vulnerabilidad": "Moradores reportaron agua hasta las rodillas en el sur; sin daños atribuidos (ene 2025)."
+      },
+      "geometry": { "type": "Point", "coordinates": [-79.885, -2.255] }
+    }
+  ]
+};
 
-// PLACEHOLDER tide table for TODAY, local time (America/Guayaquil).
-// Replace with the official INOCAR tide table for the Guayaquil station.
-const TIDES_TODAY = [
-  { time: '03:10', type: 'high', heightM: 4.1 },
-  { time: '09:25', type: 'low',  heightM: 0.6 },
-  { time: '15:35', type: 'high', heightM: 4.3 },
-  { time: '21:50', type: 'low',  heightM: 0.5 },
-];
+// Official tide table for TODAY, local time (America/Guayaquil).
+// Update `fecha` and `tides` every day from the INOCAR tide table.
+const TIDE_DATA = {
+  "fuente": "INOCAR, Tabla de Mareas 2026, Tabla II: Guayaquil (Río Guayas), p. 86",
+  "fecha": "2026-10-26",
+  "tides": [
+    { "time": "01:45", "type": "low",  "height_m": 0.80 },
+    { "time": "06:51", "type": "high", "height_m": 4.50 },
+    { "time": "14:15", "type": "low",  "height_m": 0.55 },
+    { "time": "19:31", "type": "high", "height_m": 4.50 }
+  ]
+};
 
 // Rain (mm per hour) used when Open-Meteo cannot be reached (offline).
 const FALLBACK_RAIN_MM = [0, 0.2, 0.5, 1.2, 2.0, 1.0, 0.4, 0, 0, 0, 0, 0];
@@ -71,6 +210,11 @@ const DEMO_STORM_MM = [14, 22, 18, 12, 8, 5, 3, 2, 1, 0, 0, 0];
 
   main { flex: 1; display: grid; grid-template-columns: 330px 1fr; min-height: 0; }
 
+  footer {
+    padding: 6px 16px; font-size: 12px; color: #4b5563;
+    background: #e5e7eb; border-top: 1px solid #d1d5db;
+  }
+
   /* ---------- Sidebar ---------- */
   aside { overflow-y: auto; padding: 12px; background: #fff; border-right: 1px solid #e5e7eb; }
   aside section { margin-bottom: 18px; }
@@ -85,7 +229,8 @@ const DEMO_STORM_MM = [14, 22, 18, 12, 8, 5, 3, 2, 1, 0, 0, 0];
   .bar-val { font-size: 10px; color: #374151; }
   .bar-hour { font-size: 10px; color: #6b7280; }
 
-  /* Tide list */
+  /* Tide */
+  #tide-now { font-size: 22px; font-weight: 700; }
   #tide-list { list-style: none; padding: 0; margin: 4px 0; }
   #tide-list li { display: flex; justify-content: space-between; padding: 2px 0; border-bottom: 1px dashed #e5e7eb; }
   #tide-list li.next { font-weight: 700; }
@@ -99,7 +244,7 @@ const DEMO_STORM_MM = [14, 22, 18, 12, 8, 5, 3, 2, 1, 0, 0, 0];
   #zone-list { list-style: none; padding: 0; margin: 0; }
   #zone-list li { display: flex; align-items: center; gap: 8px; padding: 3px 0; cursor: pointer; }
   #zone-list li:hover { text-decoration: underline; }
-  #zone-list .score { margin-left: auto; color: #6b7280; font-variant-numeric: tabular-nums; }
+  #zone-list .score { margin-left: auto; color: #6b7280; font-variant-numeric: tabular-nums; white-space: nowrap; }
 
   .dot { width: 12px; height: 12px; border-radius: 50%; flex: none; border: 1px solid rgba(0,0,0,.25); }
   .dot.green { background: #22c55e; } .dot.yellow { background: #facc15; } .dot.red { background: #ef4444; }
@@ -153,7 +298,7 @@ const DEMO_STORM_MM = [14, 22, 18, 12, 8, 5, 3, 2, 1, 0, 0, 0];
 <header>
   <h1>AlertaGYE</h1>
   <span class="tagline">Flood early warning for Guayaquil</span>
-  <span class="badge">Prototype · placeholder data</span>
+  <span class="badge">Prototype</span>
 </header>
 
 <main>
@@ -165,9 +310,12 @@ const DEMO_STORM_MM = [14, 22, 18, 12, 8, 5, 3, 2, 1, 0, 0, 0];
     </section>
 
     <section>
-      <h2>Tide today <span class="tag">PLACEHOLDER</span></h2>
+      <h2>Tide (INOCAR)</h2>
+      <div id="tide-now">– m</div>
       <div id="tide-status"></div>
+      <div id="tide-next"></div>
       <ul id="tide-list"></ul>
+      <div class="muted" id="tide-source"></div>
     </section>
 
     <section>
@@ -209,6 +357,8 @@ const DEMO_STORM_MM = [14, 22, 18, 12, 8, 5, 3, 2, 1, 0, 0, 0];
   </div>
 </main>
 
+<footer>Flood points from local news reports (approximate locations). Tide data: INOCAR 2026.</footer>
+
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 
@@ -218,17 +368,16 @@ const DEMO_STORM_MM = [14, 22, 18, 12, 8, 5, 3, 2, 1, 0, 0, 0];
 // =====================================================================
 const CONFIG = {
   timezone: 'America/Guayaquil',
-  zoneRadiusM: 700,          // radius of each risk circle on the map
+  zoneRadiusM: 500,          // radius of each risk circle on the map
   rainRefreshMinutes: 30,    // how often to re-download the forecast
   tickSeconds: 3,            // how often the sensor updates and risk is recomputed
-  tideHighWindowMin: 90,     // "high tide" = within ±90 min of a high-tide time
 };
 
 // Simulated water-level sensor (street water depth in cm).
 // Each tick:  level += rain_now * rainGain  -  (level - baseline) * drainRate
 // so the level rises while it rains and slowly drains back when it stops.
 const SENSOR = {
-  pointId: 'suburbio',       // which FLOOD_POINT has the sensor
+  pointId: 'florida_norte',  // which flood point has the sensor
   baselineCm: 2,             // level with no rain
   rainGainCmPerMm: 0.5,      // cm added per tick for each mm/h of rain
   drainRate: 0.08,           // fraction of the excess water drained per tick
@@ -242,50 +391,59 @@ const SENSOR = {
 //  Tweak the numbers in RISK to change how sensitive the system is.
 // =====================================================================
 //
-//  score = rain points + tide points + sensor points
+//  score = (rain points + tide points) × vulnerability factor + sensor points
 //
 //    rain points   : 0 → 50, grows linearly with the rain expected in the
 //                    next `rainWindowHours` hours; maxed at `heavyRainMm`.
-//    tide points   : +25 if the tide is high AND the zone drains into the
-//                    estuary (high tide blocks the drains).
+//    tide points   : +25 when the tide is above `highTideM` (4.0 m), because
+//                    high water in the river blocks the city's drains.
+//    vulnerability : the point's "vulnerabilidad" (1–3, from news reports)
+//                    scales the forecast part: 1 → ×0.8, 2 → ×1.0, 3 → ×1.2.
 //    sensor points : 0 → 40, grows linearly with the measured water depth;
-//                    maxed at `sensorFloodCm`. Only for the zone that has
+//                    maxed at `sensorFloodCm`. Not scaled by vulnerability
+//                    because it is a measurement. Only for the zone that has
 //                    the sensor (other zones pass sensorCm = null).
 //
 //  level: score >= redAt → red, score >= yellowAt → yellow, else green.
 //
-//  Examples: 20 mm in 3 h alone           → 50 → yellow
-//            20 mm in 3 h + high tide     → 75 → red
-//            dry, high tide               → 25 → green
+//  Examples: 20 mm in 3 h, vulnerability 2              → 50 → yellow
+//            20 mm in 3 h, vulnerability 3              → 60 → red
+//            20 mm in 3 h + high tide, vulnerability 1  → 60 → red
+//            dry, high tide, vulnerability 3            → 30 → yellow
 //
 const RISK = {
   rainWindowHours: 3,
   heavyRainMm: 20,  rainMaxPts: 50,
-  tidePts: 25,
+  highTideM: 4.0,   tidePts: 25,
+  vulnerabilityFactor: { 1: 0.8, 2: 1.0, 3: 1.2 },
   sensorFloodCm: 30, sensorMaxPts: 40,
   yellowAt: 30,
   redAt: 60,
 };
 
-function computeRisk({ rainMm, tideHigh, nearEstuary, sensorCm }) {
+function computeRisk({ rainMm, tideHeightM, vulnerability, sensorCm }) {
   const reasons = [];
 
   // 1) Forecast rain
   const rainPts = Math.min(rainMm / RISK.heavyRainMm, 1) * RISK.rainMaxPts;
   if (rainMm > 0) reasons.push(`${rainMm.toFixed(1)} mm of rain expected in the next ${RISK.rainWindowHours} h`);
 
-  // 2) High tide (only matters where the drains reach the estuary)
-  const tidePts = (tideHigh && nearEstuary) ? RISK.tidePts : 0;
-  if (tidePts > 0) reasons.push('high tide is blocking drainage');
+  // 2) High tide
+  const tidePts = tideHeightM > RISK.highTideM ? RISK.tidePts : 0;
+  if (tidePts > 0) reasons.push(`high tide (${tideHeightM.toFixed(2)} m) is blocking drainage`);
 
-  // 3) Sensor reading (only the zone that has a sensor)
+  // 3) Vulnerability of the place (scales rain + tide)
+  const factor = RISK.vulnerabilityFactor[vulnerability] ?? 1;
+  if (factor > 1 && rainPts + tidePts > 0) reasons.push(`highly vulnerable spot (${vulnerability}/3)`);
+
+  // 4) Sensor reading (only the zone that has a sensor)
   let sensorPts = 0;
   if (sensorCm !== null) {
     sensorPts = Math.min(sensorCm / RISK.sensorFloodCm, 1) * RISK.sensorMaxPts;
     reasons.push(`sensor reads ${sensorCm.toFixed(0)} cm of water (simulated)`);
   }
 
-  const score = Math.round(rainPts + tidePts + sensorPts);
+  const score = Math.round((rainPts + tidePts) * factor + sensorPts);
   const level = score >= RISK.redAt ? 'red' : score >= RISK.yellowAt ? 'yellow' : 'green';
   return { score, level, reasons };
 }
@@ -306,31 +464,79 @@ const state = {
 // =====================================================================
 const fmtHour = new Intl.DateTimeFormat('en-GB', { timeZone: CONFIG.timezone, hour: '2-digit', hourCycle: 'h23' });
 const fmtTime = new Intl.DateTimeFormat('en-GB', { timeZone: CONFIG.timezone, hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' });
+const fmtDate = new Intl.DateTimeFormat('en-CA', { timeZone: CONFIG.timezone }); // YYYY-MM-DD
 
-// Minutes since midnight, Guayaquil time.
+// Minutes since midnight, Guayaquil time (with seconds as a fraction).
 function minutesNow() {
-  const [h, m] = fmtTime.format(new Date()).split(':').map(Number);
-  return h * 60 + m;
+  const [h, m, s] = fmtTime.format(new Date()).split(':').map(Number);
+  return h * 60 + m + s / 60;
 }
 const toMinutes = (hhmm) => { const [h, m] = hhmm.split(':').map(Number); return h * 60 + m; };
+const toHHMM = (min) => {
+  const m = ((Math.round(min) % 1440) + 1440) % 1440;
+  return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
+};
 
 // =====================================================================
 //  TIDE
 // =====================================================================
-function isTideHigh() {
-  const now = minutesNow();
-  return TIDES_TODAY.some(t => t.type === 'high' && Math.abs(toMinutes(t.time) - now) <= CONFIG.tideHighWindowMin);
+
+// Today's tide events in minutes, plus one "virtual" event before the first
+// and one after the last, so every minute of the day lies between two events.
+// A virtual event copies the neighbouring interval: same duration, and the
+// type/height of the event two places away (tides alternate high/low).
+const TIDE_EVENTS = (() => {
+  const ev = TIDE_DATA.tides.map(t => ({ min: toMinutes(t.time), type: t.type, h: t.height_m }));
+  const [a, b] = ev;
+  const [y, z] = ev.slice(-2);
+  return [
+    { min: a.min - (b.min - a.min), type: b.type, h: b.h, virtual: true },
+    ...ev,
+    { min: z.min + (z.min - y.min), type: y.type, h: y.h, virtual: true },
+  ];
+})();
+
+// Tide height (m) at a given minute, by cosine interpolation between the
+// previous and next event:
+//   f = fraction of time elapsed between them (0 → 1)
+//   h = h_prev + (h_next − h_prev) × (1 − cos(π·f)) / 2
+// The cosine makes the water change slowly near high/low and fastest midway.
+function tideHeightAt(min) {
+  for (let i = 0; i < TIDE_EVENTS.length - 1; i++) {
+    const prev = TIDE_EVENTS[i], next = TIDE_EVENTS[i + 1];
+    if (min >= prev.min && min <= next.min) {
+      const f = (min - prev.min) / (next.min - prev.min);
+      return prev.h + (next.h - prev.h) * (1 - Math.cos(Math.PI * f)) / 2;
+    }
+  }
+  return null; // outside the table (should not happen)
 }
+
+const tideHeightNow = () => tideHeightAt(minutesNow());
+const isTideHigh = () => tideHeightNow() > RISK.highTideM;
 
 function renderTide() {
   const now = minutesNow();
-  const next = TIDES_TODAY.find(t => toMinutes(t.time) > now);
-  document.getElementById('tide-list').innerHTML = TIDES_TODAY.map(t =>
-    `<li class="${t === next ? 'next' : ''}"><span>${t.type === 'high' ? '▲ High' : '▼ Low'}</span><span>${t.time}</span><span>${t.heightM.toFixed(1)} m</span></li>`
-  ).join('');
+  const height = tideHeightAt(now);
+  const next = TIDE_EVENTS.find(t => t.min > now);           // next event (rising if it's a high)
+  const nextHigh = TIDE_EVENTS.find(t => t.min > now && t.type === 'high');
+
+  document.getElementById('tide-now').textContent =
+    `${height.toFixed(2)} m ${next.type === 'high' ? '↑ rising' : '↓ falling'}`;
   document.getElementById('tide-status').innerHTML = isTideHigh()
-    ? '<b style="color:#b91c1c">Tide is HIGH now</b>'
-    : 'Tide is not high now';
+    ? `<b style="color:#b91c1c">HIGH TIDE (above ${RISK.highTideM.toFixed(1)} m)</b>`
+    : `<span class="muted">High tide threshold: ${RISK.highTideM.toFixed(1)} m</span>`;
+  document.getElementById('tide-next').innerHTML = `Next high tide: <b>${toHHMM(nextHigh.min)}</b> (${nextHigh.h.toFixed(2)} m)` +
+    (nextHigh.virtual ? ' <span class="muted">· estimated, after today\'s table</span>' : '');
+
+  document.getElementById('tide-list').innerHTML = TIDE_DATA.tides.map(t =>
+    `<li class="${next && !next.virtual && toMinutes(t.time) === next.min ? 'next' : ''}">
+      <span>${t.type === 'high' ? '▲ High' : '▼ Low'}</span><span>${t.time}</span><span>${t.height_m.toFixed(2)} m</span></li>`
+  ).join('');
+
+  const outdated = TIDE_DATA.fecha !== fmtDate.format(new Date());
+  document.getElementById('tide-source').innerHTML = `${TIDE_DATA.fuente} · ${TIDE_DATA.fecha}` +
+    (outdated ? '<br><b style="color:#b91c1c">⚠ Tide table is not for today – update TIDE_DATA</b>' : '');
 }
 
 // =====================================================================
@@ -446,29 +652,36 @@ const LEVEL_STYLE = {
 };
 const LEVEL_LABEL = { green: 'Low', yellow: 'Watch', red: 'WARNING' };
 
-// One circle per flood point.
-const zones = FLOOD_POINTS.map(point => {
-  const circle = L.circle([point.lat, point.lng], {
+// One circle per flood point, loaded from the GeoJSON.
+// `point` holds the feature's properties (id, nombre, vulnerabilidad, ...).
+const zones = [];
+L.geoJSON(FLOOD_POINTS_GEOJSON, {
+  // GeoJSON is [lng, lat]; Leaflet converts it to `latlng` for us.
+  pointToLayer: (feature, latlng) => L.circle(latlng, {
     radius: CONFIG.zoneRadiusM, weight: 2, fillOpacity: 0.35, ...LEVEL_STYLE.green,
-  }).addTo(map);
-  circle.bindTooltip(point.name);
-  circle.bindPopup('');
-  return { point, circle, risk: null };
-});
+  }),
+  onEachFeature: (feature, layer) => {
+    layer.bindTooltip(feature.properties.nombre);
+    layer.bindPopup('');
+    zones.push({ point: feature.properties, circle: layer, risk: null });
+  },
+}).addTo(map);
 
 // Marker for the simulated sensor.
-const sensorPoint = FLOOD_POINTS.find(p => p.id === SENSOR.pointId);
-L.marker([sensorPoint.lat, sensorPoint.lng], {
+const sensorZone = zones.find(z => z.point.id === SENSOR.pointId);
+L.marker(sensorZone.circle.getLatLng(), {
   icon: L.divIcon({ className: '', html: '<div class="sensor-icon">S</div>', iconSize: [24, 24] }),
 }).addTo(map).bindTooltip('SIMULATED water-level sensor', { direction: 'top', offset: [0, -12] });
-document.getElementById('sensor-where').textContent = 'Located at: ' + sensorPoint.name;
+document.getElementById('sensor-where').textContent = 'Located at: ' + sensorZone.point.nombre;
 
 function popupHtml(zone) {
   const { point, risk } = zone;
-  return `<b>${point.name}</b><br>
-    Risk: <b>${LEVEL_LABEL[risk.level]}</b> (score ${risk.score})<br>
-    ${risk.reasons.length ? '<ul style="margin:4px 0;padding-left:16px">' + risk.reasons.map(r => `<li>${r}</li>`).join('') + '</ul>' : 'No risk factors right now.<br>'}
-    <span class="muted">Source: ${point.source}</span>`;
+  return `<b>${point.nombre}</b><br>
+    <i>${point.motivo_vulnerabilidad}</i><br>
+    Vulnerability: ${point.vulnerabilidad}/3${point.coords_verificadas ? '' : ' · <span class="muted">approximate location</span>'}<br>
+    Risk now: <b>${LEVEL_LABEL[risk.level]}</b> (score ${risk.score})
+    ${risk.reasons.length ? '<ul style="margin:4px 0;padding-left:16px">' + risk.reasons.map(r => `<li>${r}</li>`).join('') + '</ul>' : '<br>No risk factors right now.<br>'}
+    <a href="${point.fuente}" target="_blank" rel="noopener">Source (news report) ↗</a>`;
 }
 
 // =====================================================================
@@ -477,11 +690,11 @@ function popupHtml(zone) {
 function evaluateAll() {
   const forecast = activeForecast();
   const rainMm = forecast.slice(0, RISK.rainWindowHours).reduce((s, h) => s + h.mm, 0);
-  const tideHigh = isTideHigh();
+  const tideHeightM = tideHeightNow();
 
   zones.forEach(zone => {
     const sensorCm = zone.point.id === SENSOR.pointId ? state.sensorCm : null;
-    const risk = computeRisk({ rainMm, tideHigh, nearEstuary: zone.point.nearEstuary, sensorCm });
+    const risk = computeRisk({ rainMm, tideHeightM, vulnerability: zone.point.vulnerabilidad, sensorCm });
 
     // Raise an alert only when a zone CHANGES to red.
     if (risk.level === 'red' && zone.risk?.level !== 'red') raiseAlert(zone.point, risk);
@@ -497,9 +710,9 @@ function evaluateAll() {
 function renderZoneList() {
   const list = document.getElementById('zone-list');
   list.innerHTML = zones.map((z, i) => `
-    <li data-i="${i}"><span class="dot ${z.risk.level}"></span>${z.point.name}
+    <li data-i="${i}"><span class="dot ${z.risk.level}"></span>${z.point.nombre}
       ${z.point.id === SENSOR.pointId ? '<span class="tag">S</span>' : ''}
-      <span class="score">${z.risk.score}</span></li>`).join('');
+      <span class="score">V${z.point.vulnerabilidad} · ${z.risk.score}</span></li>`).join('');
 }
 
 // Click a zone in the list → fly to it and open its popup.
@@ -507,7 +720,7 @@ document.getElementById('zone-list').addEventListener('click', e => {
   const li = e.target.closest('li');
   if (!li) return;
   const zone = zones[li.dataset.i];
-  map.flyTo(zone.circle.getLatLng(), 14);
+  map.flyTo(zone.circle.getLatLng(), 15);
   zone.circle.openPopup();
 });
 
@@ -515,7 +728,7 @@ document.getElementById('zone-list').addEventListener('click', e => {
 //  ALERTS
 // =====================================================================
 function raiseAlert(point, risk) {
-  state.alerts.unshift({ time: new Date(), name: point.name, score: risk.score, reasons: risk.reasons });
+  state.alerts.unshift({ time: new Date(), name: point.nombre, score: risk.score, reasons: risk.reasons });
   renderAlerts();
   document.getElementById('alert-panel').hidden = false;
 }
@@ -533,12 +746,14 @@ document.getElementById('alert-close').onclick = () => {
 // =====================================================================
 //  LEGEND (built from RISK so it stays in sync with the formula)
 // =====================================================================
+const vf = RISK.vulnerabilityFactor;
 document.getElementById('legend').innerHTML = `
   <div class="legend-row"><span class="dot green"></span><div><b>Green – Low</b> (score &lt; ${RISK.yellowAt}). Normal conditions.</div></div>
   <div class="legend-row"><span class="dot yellow"></span><div><b>Yellow – Watch</b> (${RISK.yellowAt}–${RISK.redAt - 1}). Rain and/or tide could flood streets. Stay informed.</div></div>
   <div class="legend-row"><span class="dot red"></span><div><b>Red – Warning</b> (≥ ${RISK.redAt}). Flooding likely. Avoid the area. Triggers an alert.</div></div>
   <div class="legend-row"><span class="sensor-icon" style="width:16px;height:16px;line-height:12px;font-size:8px;flex:none">S</span><div>Simulated water-level sensor.</div></div>
-  <p class="muted">Score = rain (0–${RISK.rainMaxPts}) + high tide (${RISK.tidePts}, estuary zones only) + sensor (0–${RISK.sensorMaxPts}).</p>`;
+  <p class="muted">Score = (rain 0–${RISK.rainMaxPts} + tide ${RISK.tidePts} if above ${RISK.highTideM.toFixed(1)} m)
+    × vulnerability (V1 ×${vf[1]}, V2 ×${vf[2]}, V3 ×${vf[3]}) + sensor 0–${RISK.sensorMaxPts}.</p>`;
 
 // =====================================================================
 //  DEMO STORM BUTTON
