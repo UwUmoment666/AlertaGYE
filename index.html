@@ -271,6 +271,28 @@ const DEMO_STORM_MM = [14, 22, 18, 12, 8, 5, 3, 2, 1, 0, 0, 0];
     padding: 6px 12px; border: 1px solid #9ca3af; border-radius: 6px; background: #fff; cursor: pointer; font-weight: 600;
   }
   #map.picking { cursor: crosshair; }
+
+  /* Citizen reports */
+  #report-btn {
+    width: 100%; padding: 8px; border: 0; border-radius: 6px; cursor: pointer;
+    background: #6d28d9; color: #fff; font-weight: 600;
+  }
+  #report-btn.on { background: #b45309; }
+  #report-status { margin: 6px 0; }
+  #report-clear {
+    padding: 4px 10px; border: 1px solid #9ca3af; border-radius: 6px; background: #fff; cursor: pointer; font-size: 12px;
+  }
+  .sev-btn {
+    border: 0; color: #fff; padding: 5px 9px; margin: 6px 4px 0 0; border-radius: 4px; cursor: pointer; font-weight: 600;
+  }
+  /* Teardrop pin, so reports look different from the zone circles and the round pins */
+  .report-icon {
+    position: relative; width: 22px; height: 22px; border-radius: 50% 50% 50% 0;
+    transform: rotate(-45deg); border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.5);
+  }
+  .report-icon::after {
+    content: ''; position: absolute; top: 5px; left: 5px; width: 8px; height: 8px; border-radius: 50%; background: #fff;
+  }
   .route-pin {
     width: 26px; height: 26px; border-radius: 50%; color: #fff; text-align: center;
     font: 700 13px/22px system-ui, sans-serif; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.5);
@@ -326,6 +348,14 @@ const DEMO_STORM_MM = [14, 22, 18, 12, 8, 5, 3, 2, 1, 0, 0, 0];
       <ul id="route-list"></ul>
       <button id="route-reset">Reset route</button>
       <p class="muted" id="route-help"></p>
+    </section>
+
+    <section>
+      <h2>Citizen reports <span class="tag">DEMO</span></h2>
+      <button id="report-btn">Report flooding</button>
+      <div id="report-status"></div>
+      <p class="muted">Demo: reports are stored only on this device.</p>
+      <button id="report-clear">Clear all reports</button>
     </section>
 
     <section>
@@ -779,6 +809,7 @@ document.getElementById('legend').innerHTML = `
   <div class="legend-row"><span class="dot yellow"></span><div><b>Yellow – Watch</b> (${RISK.yellowAt}–${RISK.redAt - 1}). Rain and/or tide could flood streets. Stay informed.</div></div>
   <div class="legend-row"><span class="dot red"></span><div><b>Red – Warning</b> (≥ ${RISK.redAt}). Flooding likely. Avoid the area. Triggers an alert.</div></div>
   <div class="legend-row"><span class="sensor-icon" style="width:16px;height:16px;line-height:12px;font-size:8px;flex:none">S</span><div>Simulated water-level sensor.</div></div>
+  <div class="legend-row"><span class="report-icon" style="background:#6d28d9;width:14px;height:14px;flex:none;margin:2px 3px 0"></span><div>Citizen report. Color = depth: light blue ankle, blue knee, purple impassable.</div></div>
   <p class="muted">Score = (rain 0–${RISK.rainMaxPts} + tide ${RISK.tidePts} if above ${RISK.highTideM.toFixed(1)} m)
     × vulnerability (V1 ×${vf[1]}, V2 ×${vf[2]}, V3 ×${vf[3]}) + sensor 0–${RISK.sensorMaxPts}.</p>`;
 
@@ -800,6 +831,8 @@ const ROUTING = {
   url: 'https://router.project-osrm.org/route/v1/driving/',
   timeoutMs: 10000,                              // give up after 10 s
   riskWeight: { red: 3, yellow: 1, green: 0 },   // points per zone the route crosses
+  impassablePenalty: 2,                          // points per "impassable" citizen report...
+  impassableRadiusM: 200,                        // ...within this distance of the route
 };
 
 const routing = {
@@ -811,7 +844,14 @@ const routing = {
 };
 
 document.getElementById('route-help').textContent =
-  `Route risk score = zones crossed: red ×${ROUTING.riskWeight.red}, yellow ×${ROUTING.riskWeight.yellow}, green ×${ROUTING.riskWeight.green}. Lowest score is recommended.`;
+  `Route risk score = zones crossed: red ×${ROUTING.riskWeight.red}, yellow ×${ROUTING.riskWeight.yellow}, green ×${ROUTING.riskWeight.green}, ` +
+  `plus ${ROUTING.impassablePenalty} per "impassable" report within ${ROUTING.impassableRadiusM} m. Lowest score is recommended.`;
+
+// Crosshair cursor while the map is waiting for a click (route point or report).
+function updateCursor() {
+  const waiting = reports.mode || !routing.destination;
+  map.getContainer().classList.toggle('picking', waiting);
+}
 
 function setRouteStatus(html, isError = false) {
   const el = document.getElementById('route-status');
@@ -828,12 +868,15 @@ function routePin(latlng, label, color) {
 
 // 1st click = origin, 2nd click = destination (then ask for routes).
 map.on('click', e => {
+  // While "Report flooding" is on, the click places a report instead.
+  if (reports.mode) { askSeverity(e.latlng); return; }
+
   if (!routing.origin) {
     routing.origin = routePin(e.latlng, 'A', '#15803d');
     setRouteStatus('Now click the map to set the <b>destination (B)</b>.');
   } else if (!routing.destination) {
     routing.destination = routePin(e.latlng, 'B', '#b91c1c');
-    map.getContainer().classList.remove('picking');
+    updateCursor();
     requestRoutes();
   }
 });
@@ -844,7 +887,7 @@ function resetRoute() {
   routing.origin = routing.destination = null;
   routing.options = [];
   document.getElementById('route-list').innerHTML = '';
-  map.getContainer().classList.add('picking');
+  updateCursor();
   setRouteStatus('Click the map to set the <b>origin (A)</b>.');
 }
 document.getElementById('route-reset').onclick = resetRoute;
@@ -872,11 +915,13 @@ async function requestRoutes() {
 
     routing.options = data.routes.map(r => {
       const latlngs = r.geometry.coordinates.map(([lng, lat]) => L.latLng(lat, lng));
+      const pts = latlngs.map(toMetres);  // projected once, reused for every distance check
       return {
         line: L.polyline(latlngs).addTo(routing.layer),
+        pts,
         durationS: r.duration,
         distanceM: r.distance,
-        zoneIdx: zonesCrossed(latlngs),   // which circles this route goes through
+        zoneIdx: zonesCrossed(pts),       // which circles this route goes through
         score: 0,
       };
     });
@@ -895,35 +940,45 @@ async function requestRoutes() {
   }
 }
 
-// Indexes of the zones whose circle the route passes through: a route
-// crosses a zone if any of its segments comes within the circle's radius
-// of the centre. Distances use Web Mercator metres, which is accurate
-// enough this close to the equator.
-function zonesCrossed(latlngs) {
-  const project = ll => L.Projection.SphericalMercator.project(ll);
-  const pts = latlngs.map(project);
-  const crossed = [];
-  zones.forEach((zone, i) => {
-    const centre = project(zone.circle.getLatLng());
-    for (let k = 0; k < pts.length - 1; k++) {
-      if (L.LineUtil.pointToSegmentDistance(centre, pts[k], pts[k + 1]) <= zone.circle.getRadius()) {
-        crossed.push(i);
-        break;
-      }
-    }
-  });
-  return crossed;
+// Distances use Web Mercator metres, which is accurate enough this close
+// to the equator.
+const toMetres = ll => L.Projection.SphericalMercator.project(ll);
+
+// True if any segment of the route (projected points) comes within
+// `radiusM` metres of `latlng`.
+function routePassesNear(pts, latlng, radiusM) {
+  const p = toMetres(latlng);
+  for (let k = 0; k < pts.length - 1; k++) {
+    if (L.LineUtil.pointToSegmentDistance(p, pts[k], pts[k + 1]) <= radiusM) return true;
+  }
+  return false;
 }
 
-// Route score = sum of the risk weights of the zones it crosses, using the
-// zones' CURRENT colour. Runs after every risk update, so the recommended
+// Indexes of the zones whose circle the route passes through.
+function zonesCrossed(pts) {
+  return zones.flatMap((zone, i) =>
+    routePassesNear(pts, zone.circle.getLatLng(), zone.circle.getRadius()) ? [i] : []);
+}
+
+// Number of "impassable" citizen reports near the route.
+function impassableNear(pts) {
+  return reports.list.filter(r =>
+    r.severity === 'impassable' && routePassesNear(pts, L.latLng(r.lat, r.lng), ROUTING.impassableRadiusM)
+  ).length;
+}
+
+// Route score = sum of the risk weights of the zones it crosses (using the
+// zones' CURRENT colour) + a penalty for each nearby "impassable" report.
+// Runs after every risk update and every new report, so the recommended
 // route can change while you watch (try the storm demo).
 function scoreRoutes() {
   if (!routing.options.length) return;
   const level = i => zones[i].risk?.level ?? 'green';
 
   routing.options.forEach(o => {
-    o.score = o.zoneIdx.reduce((sum, i) => sum + ROUTING.riskWeight[level(i)], 0);
+    o.impassable = impassableNear(o.pts);
+    o.score = o.zoneIdx.reduce((sum, i) => sum + ROUTING.riskWeight[level(i)], 0)
+            + o.impassable * ROUTING.impassablePenalty;
   });
 
   // Recommended = lowest risk score; ties go to the faster route.
@@ -943,8 +998,106 @@ function scoreRoutes() {
       <span class="muted">${o.zoneIdx.length
         ? 'Crosses: ' + o.zoneIdx.map(i => `<span class="dot inline ${level(i)}"></span>${zones[i].point.nombre}`).join(', ')
         : 'Crosses no risk zones'}</span>
+      ${o.impassable ? `<br><span style="color:#6d28d9;font-weight:600">⚠ ${o.impassable} "impassable" report(s) nearby (+${ROUTING.impassablePenalty} each)</span>` : ''}
     </li>`).join('');
 }
+
+// =====================================================================
+//  CITIZEN REPORTS (demo: saved in this browser's localStorage only)
+// =====================================================================
+const SEVERITY = {
+  ankle:      { label: 'Ankle-deep', color: '#0ea5e9' },
+  knee:       { label: 'Knee-deep',  color: '#2563eb' },
+  impassable: { label: 'Impassable', color: '#6d28d9' },
+};
+const REPORTS_KEY = 'alertagye.reports';
+const fmtReportTime = new Intl.DateTimeFormat('en-GB', {
+  timeZone: CONFIG.timezone, day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+});
+
+const reports = {
+  mode: false,                       // true while "Report flooding" is active
+  list: loadReports(),               // [{ lat, lng, severity, time (ISO) }]
+  layer: L.layerGroup().addTo(map),
+};
+
+// localStorage can be missing or blocked (private mode, some previews),
+// so both read and write are wrapped in try/catch.
+function loadReports() {
+  try { return JSON.parse(localStorage.getItem(REPORTS_KEY)) || []; }
+  catch { return []; }
+}
+function saveReports() {
+  try { localStorage.setItem(REPORTS_KEY, JSON.stringify(reports.list)); }
+  catch (err) { console.warn('Could not save reports:', err); }
+}
+
+function setReportMode(on) {
+  reports.mode = on;
+  const btn = document.getElementById('report-btn');
+  btn.classList.toggle('on', on);
+  btn.textContent = on ? 'Cancel reporting' : 'Report flooding';
+  updateCursor();
+  renderReportStatus();
+}
+document.getElementById('report-btn').onclick = () => setReportMode(!reports.mode);
+
+function renderReportStatus() {
+  document.getElementById('report-status').innerHTML = reports.mode
+    ? '<b>Click the map where you see flooding.</b>'
+    : `<span class="muted">${reports.list.length} report(s) on the map.</span>`;
+}
+
+// After a map click: a small popup asks how deep the water is.
+function askSeverity(latlng) {
+  const box = L.DomUtil.create('div');
+  box.innerHTML = '<b>How deep is the water?</b><br>';
+  Object.entries(SEVERITY).forEach(([key, s]) => {
+    const btn = L.DomUtil.create('button', 'sev-btn', box);
+    btn.textContent = s.label;
+    btn.style.background = s.color;
+    btn.onclick = () => {
+      addReport({ lat: latlng.lat, lng: latlng.lng, severity: key, time: new Date().toISOString() });
+      map.closePopup();
+      setReportMode(false);   // one report per click of the button
+    };
+  });
+  L.popup().setLatLng(latlng).setContent(box).openOn(map);
+}
+
+function addReport(report) {
+  reports.list.push(report);
+  saveReports();
+  drawReport(report);
+  renderReportStatus();
+  scoreRoutes();   // an "impassable" report can change the recommended route
+}
+
+function drawReport(r) {
+  const s = SEVERITY[r.severity];
+  L.marker([r.lat, r.lng], {
+    icon: L.divIcon({
+      className: '', iconSize: [22, 22], iconAnchor: [11, 26], popupAnchor: [0, -26],
+      html: `<div class="report-icon" style="background:${s.color}"></div>`,
+    }),
+  }).addTo(reports.layer).bindPopup(`
+    <b>Citizen report: ${s.label}</b><br>
+    Reported ${fmtReportTime.format(new Date(r.time))}<br>
+    <span class="muted">Demo: reports are stored only on this device.</span>`);
+}
+
+document.getElementById('report-clear').onclick = () => {
+  if (!reports.list.length || !confirm('Delete all reports stored on this device?')) return;
+  reports.list = [];
+  saveReports();
+  reports.layer.clearLayers();
+  renderReportStatus();
+  scoreRoutes();
+};
+
+// Draw the reports saved from previous visits.
+reports.list.forEach(drawReport);
+renderReportStatus();
 
 // =====================================================================
 //  START
