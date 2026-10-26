@@ -259,6 +259,23 @@ const DEMO_STORM_MM = [14, 22, 18, 12, 8, 5, 3, 2, 1, 0, 0, 0];
   }
   #storm-btn.on { background: #b91c1c; }
 
+  /* Safe route */
+  #route-status { margin-bottom: 6px; }
+  #route-status.error { color: #b91c1c; font-weight: 600; }
+  #route-list { list-style: none; padding: 0; margin: 0 0 8px; }
+  #route-list li { padding: 6px 8px; margin-bottom: 6px; border-left: 4px solid #9ca3af; background: #f9fafb; border-radius: 4px; }
+  #route-list li.best { border-left-color: #1d4ed8; background: #eff6ff; }
+  .tag.rec { background: #1d4ed8; color: #fff; }
+  .dot.inline { display: inline-block; width: 9px; height: 9px; vertical-align: middle; margin-right: 2px; }
+  #route-reset {
+    padding: 6px 12px; border: 1px solid #9ca3af; border-radius: 6px; background: #fff; cursor: pointer; font-weight: 600;
+  }
+  #map.picking { cursor: crosshair; }
+  .route-pin {
+    width: 26px; height: 26px; border-radius: 50%; color: #fff; text-align: center;
+    font: 700 13px/22px system-ui, sans-serif; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.5);
+  }
+
   /* ---------- Map + alert panel ---------- */
   #map-wrap { position: relative; min-height: 0; }
   #map { height: 100%; }
@@ -304,6 +321,14 @@ const DEMO_STORM_MM = [14, 22, 18, 12, 8, 5, 3, 2, 1, 0, 0, 0];
 <main>
   <aside>
     <section>
+      <h2>Safe route</h2>
+      <div id="route-status"></div>
+      <ul id="route-list"></ul>
+      <button id="route-reset">Reset route</button>
+      <p class="muted" id="route-help"></p>
+    </section>
+
+    <section>
       <h2>Rain forecast · next 12 h</h2>
       <div id="rain-status" class="muted">Loading forecast…</div>
       <div id="rain-chart"></div>
@@ -344,6 +369,7 @@ const DEMO_STORM_MM = [14, 22, 18, 12, 8, 5, 3, 2, 1, 0, 0, 0];
     <p class="muted">
       Weather data: <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo.com</a> (CC BY 4.0).
       Map: © OpenStreetMap contributors.
+      Routes: <a href="https://project-osrm.org/" target="_blank" rel="noopener">OSRM</a> public demo server.
     </p>
   </aside>
 
@@ -705,6 +731,7 @@ function evaluateAll() {
   });
 
   renderZoneList();
+  scoreRoutes();   // routes follow the live risk too
 }
 
 function renderZoneList() {
@@ -767,6 +794,159 @@ document.getElementById('storm-btn').onclick = (e) => {
 };
 
 // =====================================================================
+//  SAFE ROUTE (driving routes from the public OSRM demo server)
+// =====================================================================
+const ROUTING = {
+  url: 'https://router.project-osrm.org/route/v1/driving/',
+  timeoutMs: 10000,                              // give up after 10 s
+  riskWeight: { red: 3, yellow: 1, green: 0 },   // points per zone the route crosses
+};
+
+const routing = {
+  origin: null,        // L.Marker "A"
+  destination: null,   // L.Marker "B"
+  options: [],         // one entry per route: { line, durationS, distanceM, zoneIdx, score }
+  requestId: 0,        // ignores answers that arrive after "Reset route"
+  layer: L.layerGroup().addTo(map),   // holds pins + route lines, cleared on reset
+};
+
+document.getElementById('route-help').textContent =
+  `Route risk score = zones crossed: red ×${ROUTING.riskWeight.red}, yellow ×${ROUTING.riskWeight.yellow}, green ×${ROUTING.riskWeight.green}. Lowest score is recommended.`;
+
+function setRouteStatus(html, isError = false) {
+  const el = document.getElementById('route-status');
+  el.innerHTML = html;
+  el.classList.toggle('error', isError);
+}
+
+// Small round "A" / "B" pin.
+function routePin(latlng, label, color) {
+  return L.marker(latlng, {
+    icon: L.divIcon({ className: '', html: `<div class="route-pin" style="background:${color}">${label}</div>`, iconSize: [26, 26] }),
+  }).addTo(routing.layer);
+}
+
+// 1st click = origin, 2nd click = destination (then ask for routes).
+map.on('click', e => {
+  if (!routing.origin) {
+    routing.origin = routePin(e.latlng, 'A', '#15803d');
+    setRouteStatus('Now click the map to set the <b>destination (B)</b>.');
+  } else if (!routing.destination) {
+    routing.destination = routePin(e.latlng, 'B', '#b91c1c');
+    map.getContainer().classList.remove('picking');
+    requestRoutes();
+  }
+});
+
+function resetRoute() {
+  routing.requestId++;              // forget any request still in flight
+  routing.layer.clearLayers();
+  routing.origin = routing.destination = null;
+  routing.options = [];
+  document.getElementById('route-list').innerHTML = '';
+  map.getContainer().classList.add('picking');
+  setRouteStatus('Click the map to set the <b>origin (A)</b>.');
+}
+document.getElementById('route-reset').onclick = resetRoute;
+
+async function requestRoutes() {
+  const a = routing.origin.getLatLng();
+  const b = routing.destination.getLatLng();
+  // OSRM wants "lng,lat;lng,lat". geometries=geojson gives [lng, lat] points.
+  const url = `${ROUTING.url}${a.lng},${a.lat};${b.lng},${b.lat}` +
+              '?alternatives=true&overview=full&geometries=geojson';
+
+  const myRequest = ++routing.requestId;
+  setRouteStatus('Looking for routes…');
+
+  // Abort the request if the server takes too long.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ROUTING.timeoutMs);
+
+  try {
+    const res = await fetch(url, { signal: controller.signal });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    if (data.code !== 'Ok' || !data.routes?.length) throw new Error(data.message || data.code);
+    if (myRequest !== routing.requestId) return;   // user pressed Reset meanwhile
+
+    routing.options = data.routes.map(r => {
+      const latlngs = r.geometry.coordinates.map(([lng, lat]) => L.latLng(lat, lng));
+      return {
+        line: L.polyline(latlngs).addTo(routing.layer),
+        durationS: r.duration,
+        distanceM: r.distance,
+        zoneIdx: zonesCrossed(latlngs),   // which circles this route goes through
+        score: 0,
+      };
+    });
+    setRouteStatus(`${routing.options.length} route(s) found. Press <b>Reset route</b> to plan another.`);
+    scoreRoutes();
+    map.fitBounds(L.featureGroup(routing.options.map(o => o.line)).getBounds(), { padding: [30, 30] });
+  } catch (err) {
+    if (myRequest !== routing.requestId) return;
+    console.warn('Routing failed:', err);
+    setRouteStatus(err.name === 'AbortError'
+      ? 'The routing server is taking too long to answer. Please press <b>Reset route</b> and try again in a moment.'
+      : 'Sorry, we couldn\'t get a route right now (the free routing server may be busy, or there is no road between these points). Press <b>Reset route</b> and try again.',
+      true);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// Indexes of the zones whose circle the route passes through: a route
+// crosses a zone if any of its segments comes within the circle's radius
+// of the centre. Distances use Web Mercator metres, which is accurate
+// enough this close to the equator.
+function zonesCrossed(latlngs) {
+  const project = ll => L.Projection.SphericalMercator.project(ll);
+  const pts = latlngs.map(project);
+  const crossed = [];
+  zones.forEach((zone, i) => {
+    const centre = project(zone.circle.getLatLng());
+    for (let k = 0; k < pts.length - 1; k++) {
+      if (L.LineUtil.pointToSegmentDistance(centre, pts[k], pts[k + 1]) <= zone.circle.getRadius()) {
+        crossed.push(i);
+        break;
+      }
+    }
+  });
+  return crossed;
+}
+
+// Route score = sum of the risk weights of the zones it crosses, using the
+// zones' CURRENT colour. Runs after every risk update, so the recommended
+// route can change while you watch (try the storm demo).
+function scoreRoutes() {
+  if (!routing.options.length) return;
+  const level = i => zones[i].risk?.level ?? 'green';
+
+  routing.options.forEach(o => {
+    o.score = o.zoneIdx.reduce((sum, i) => sum + ROUTING.riskWeight[level(i)], 0);
+  });
+
+  // Recommended = lowest risk score; ties go to the faster route.
+  const best = [...routing.options].sort((a, b) => a.score - b.score || a.durationS - b.durationS)[0];
+
+  routing.options.forEach(o => {
+    o.line.setStyle(o === best
+      ? { color: '#1d4ed8', weight: 7, opacity: 0.9 }    // bold blue
+      : { color: '#6b7280', weight: 3, opacity: 0.8 });  // thin gray
+  });
+  best.line.bringToFront();
+
+  document.getElementById('route-list').innerHTML = routing.options.map((o, n) => `
+    <li class="${o === best ? 'best' : ''}">
+      <b>Route ${n + 1}</b> ${o === best ? '<span class="tag rec">Recommended</span>' : ''}<br>
+      ${Math.round(o.durationS / 60)} min · ${(o.distanceM / 1000).toFixed(1)} km · risk score <b>${o.score}</b><br>
+      <span class="muted">${o.zoneIdx.length
+        ? 'Crosses: ' + o.zoneIdx.map(i => `<span class="dot inline ${level(i)}"></span>${zones[i].point.nombre}`).join(', ')
+        : 'Crosses no risk zones'}</span>
+    </li>`).join('');
+}
+
+// =====================================================================
 //  START
 // =====================================================================
 function tick() {
@@ -778,6 +958,7 @@ function tick() {
 
 renderTide();
 renderSensor();
+resetRoute();
 loadForecast();
 setInterval(tick, CONFIG.tickSeconds * 1000);
 setInterval(loadForecast, CONFIG.rainRefreshMinutes * 60 * 1000);
